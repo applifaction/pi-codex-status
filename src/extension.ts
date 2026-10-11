@@ -76,17 +76,16 @@ function setFooterStatus(ctx: CommandContext, snapshot: CodexUsageSnapshot | und
 function mergeLimit(existing: RateLimit | undefined, update: RateLimit | undefined): RateLimit | undefined {
   if (!existing) return update;
   if (!update) return existing;
-  const primary = update.primary ?? existing.primary;
-  const secondary = update.secondary ?? existing.secondary;
-  return {
-    ...existing,
-    ...update,
-    ...(primary ? { primary } : {}),
-    ...(secondary ? { secondary } : {}),
-  };
+
+  const merged: RateLimit = { ...existing, ...update };
+  if (update.primary) merged.primary = update.primary;
+  else delete merged.primary;
+  if (update.secondary) merged.secondary = update.secondary;
+  else delete merged.secondary;
+  return merged;
 }
 
-function mergeSnapshots(
+export function mergeSnapshots(
   existing: CodexUsageSnapshot | undefined,
   update: CodexUsageSnapshot,
 ): CodexUsageSnapshot {
@@ -158,7 +157,7 @@ function colorizeStatusLine(line: string, theme: ThemeLike): string {
   }
 
   out = out.replace(">_ Codex usage", color(theme, "accent", bold(theme, ">_ Codex usage")));
-  out = out.replace(/(Account|Updated|5h limit|Weekly limit|Credits):/g, (label) =>
+  out = out.replace(/(Account|Updated|(?:\d+d(?:\d+h)?|\d+h(?:\d+m)?|\d+m|Weekly) limit|Credits):/g, (label) =>
     color(theme, "muted", label),
   );
   out = out.replace(/(Visit https:\/\/chatgpt\.com\/codex\/settings\/usage for up-to-date|information on rate limits and credits)/g, (text) =>

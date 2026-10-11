@@ -35,16 +35,18 @@ function mergeLimit(existing, update) {
         return update;
     if (!update)
         return existing;
-    const primary = update.primary ?? existing.primary;
-    const secondary = update.secondary ?? existing.secondary;
-    return {
-        ...existing,
-        ...update,
-        ...(primary ? { primary } : {}),
-        ...(secondary ? { secondary } : {}),
-    };
+    const merged = { ...existing, ...update };
+    if (update.primary)
+        merged.primary = update.primary;
+    else
+        delete merged.primary;
+    if (update.secondary)
+        merged.secondary = update.secondary;
+    else
+        delete merged.secondary;
+    return merged;
 }
-function mergeSnapshots(existing, update) {
+export function mergeSnapshots(existing, update) {
     if (!existing)
         return update;
     const byId = new Map(existing.additionalLimits.map((limit) => [limit.id, limit]));
@@ -111,7 +113,7 @@ function colorizeStatusLine(line, theme) {
         out = out.replace(`${pctText}% left`, color(theme, statusColor, `${pctText}% left`));
     }
     out = out.replace(">_ Codex usage", color(theme, "accent", bold(theme, ">_ Codex usage")));
-    out = out.replace(/(Account|Updated|5h limit|Weekly limit|Credits):/g, (label) => color(theme, "muted", label));
+    out = out.replace(/(Account|Updated|(?:\d+d(?:\d+h)?|\d+h(?:\d+m)?|\d+m|Weekly) limit|Credits):/g, (label) => color(theme, "muted", label));
     out = out.replace(/(Visit https:\/\/chatgpt\.com\/codex\/settings\/usage for up-to-date|information on rate limits and credits)/g, (text) => color(theme, "dim", text));
     out = out.replace(/(GPT-[^:]+ limit:)/g, (text) => color(theme, "accent", bold(theme, text)));
     if (out.startsWith("╭") || out.startsWith("╰"))

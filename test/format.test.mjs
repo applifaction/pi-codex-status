@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mergeSnapshots } from "../dist/extension.js";
 import { bar, formatReset, formatStatus, formatStatusline } from "../dist/format.js";
 import { parseCodexRateLimitHeaders } from "../dist/rate-limits.js";
 import { normalizeWindow } from "../dist/usage.js";
@@ -79,6 +80,48 @@ test("drops inactive zero-duration windows", () => {
 
   assert.equal(snapshot.defaultLimit.secondary, undefined);
   assert.equal(normalizeWindow({ used_percent: 0, limit_window_seconds: 0 }), undefined);
+});
+
+test("does not create a quota limit from credit-only headers", () => {
+  const snapshot = parseCodexRateLimitHeaders({
+    "x-codex-credits-has-credits": "true",
+    "x-codex-credits-balance": "10",
+  });
+
+  assert.equal(snapshot.defaultLimit, undefined);
+  assert.equal(snapshot.credits.balance, "10");
+});
+
+test("current header windows replace stale cached windows", () => {
+  const existing = {
+    schemaVersion: 1,
+    source: "api",
+    fetchedAt: "2026-07-29T11:00:00.000Z",
+    account: { plan: "pro" },
+    defaultLimit: {
+      id: "codex",
+      name: "Codex",
+      primary: { usedPercent: 20, leftPercent: 80, windowSeconds: 18000 },
+      secondary: { usedPercent: 40, leftPercent: 60, windowSeconds: 604800 },
+    },
+    additionalLimits: [],
+  };
+  const update = {
+    schemaVersion: 1,
+    source: "headers",
+    fetchedAt: "2026-07-29T12:00:00.000Z",
+    account: {},
+    defaultLimit: {
+      id: "codex",
+      name: "Codex",
+      primary: { usedPercent: 15, leftPercent: 85, windowSeconds: 604800 },
+    },
+    additionalLimits: [],
+  };
+
+  const merged = mergeSnapshots(existing, update);
+  assert.deepEqual(merged.defaultLimit.primary, update.defaultLimit.primary);
+  assert.equal(merged.defaultLimit.secondary, undefined);
 });
 
 test("labels a primary seven-day window by duration", () => {

@@ -67,8 +67,7 @@ function parseLimit(headers, limitId) {
     const prefix = `x-${normalizedHeaderId}`;
     const primary = parseWindow(headers, prefix, "primary");
     const secondary = parseWindow(headers, prefix, "secondary");
-    const credits = parseCredits(headers);
-    if (!primary && !secondary && !credits)
+    if (!primary && !secondary)
         return undefined;
     const name = headerValue(headers, `${prefix}-limit-name`) || (limitId === "codex" ? "Codex" : normalizeLimitId(limitId));
     return {
@@ -88,10 +87,10 @@ export function parseCodexRateLimitHeaders(headers) {
         limitIds.add(normalizeLimitId(lower.slice(2, -suffix.length)));
     }
     const limits = [...limitIds].map((id) => parseLimit(headers, id)).filter((x) => !!x);
-    if (limits.length === 0)
+    const credits = parseCredits(headers);
+    if (limits.length === 0 && !credits)
         return undefined;
     const defaultLimit = limits.find((limit) => limit.id === "codex");
-    const credits = parseCredits(headers);
     return {
         schemaVersion: SCHEMA_VERSION,
         source: "headers",

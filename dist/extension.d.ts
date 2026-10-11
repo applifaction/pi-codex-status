@@ -1,4 +1,5 @@
 import { Text } from "@mariozechner/pi-tui";
+import type { CodexUsageSnapshot } from "./types.js";
 type ThemeLike = {
     fg?: (name: string, text: string) => string;
     bold?: (text: string) => string;
@@ -36,5 +37,6 @@ type PiApi = {
         deliverAs?: "steer" | "followUp" | "nextTurn";
     }) => void;
 };
+export declare function mergeSnapshots(existing: CodexUsageSnapshot | undefined, update: CodexUsageSnapshot): CodexUsageSnapshot;
 export default function codexUsageExtension(pi: PiApi): void;
 export {};

@@ -44,8 +44,9 @@ function parseWindow(headers: HeaderLike, prefix: string, which: "primary" | "se
   const minutes = numberHeader(headers, `${prefix}-${which}-window-minutes`);
   const resetAt = normalizeResetAt(numberHeader(headers, `${prefix}-${which}-reset-at`));
 
-  if (used === undefined && minutes === undefined && resetAt === undefined) return undefined;
-  const usedPercent = Math.max(0, Math.min(100, used ?? 0));
+  if (used === undefined) return undefined;
+  if (minutes !== undefined && minutes <= 0) return undefined;
+  const usedPercent = Math.max(0, Math.min(100, used));
   return {
     usedPercent,
     leftPercent: Math.max(0, Math.min(100, 100 - usedPercent)),
@@ -134,6 +135,7 @@ interface RateLimitEventPayload {
 
 function eventWindowToLimitWindow(window: RateLimitEventWindow | undefined): LimitWindow | undefined {
   if (!window || typeof window.used_percent !== "number") return undefined;
+  if (window.window_minutes !== undefined && window.window_minutes <= 0) return undefined;
   const usedPercent = Math.max(0, Math.min(100, window.used_percent));
   const resetAt = normalizeResetAt(window.reset_at);
   return {

@@ -38,9 +38,11 @@ function parseWindow(headers, prefix, which) {
     const used = numberHeader(headers, `${prefix}-${which}-used-percent`);
     const minutes = numberHeader(headers, `${prefix}-${which}-window-minutes`);
     const resetAt = normalizeResetAt(numberHeader(headers, `${prefix}-${which}-reset-at`));
-    if (used === undefined && minutes === undefined && resetAt === undefined)
+    if (used === undefined)
         return undefined;
-    const usedPercent = Math.max(0, Math.min(100, used ?? 0));
+    if (minutes !== undefined && minutes <= 0)
+        return undefined;
+    const usedPercent = Math.max(0, Math.min(100, used));
     return {
         usedPercent,
         leftPercent: Math.max(0, Math.min(100, 100 - usedPercent)),
@@ -102,6 +104,8 @@ export function parseCodexRateLimitHeaders(headers) {
 }
 function eventWindowToLimitWindow(window) {
     if (!window || typeof window.used_percent !== "number")
+        return undefined;
+    if (window.window_minutes !== undefined && window.window_minutes <= 0)
         return undefined;
     const usedPercent = Math.max(0, Math.min(100, window.used_percent));
     const resetAt = normalizeResetAt(window.reset_at);

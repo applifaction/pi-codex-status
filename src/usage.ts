@@ -36,6 +36,7 @@ export function normalizeWindow(window: unknown, nowMs = Date.now()): LimitWindo
   const explicitWindowSeconds = numberValue(obj.limit_window_seconds) ?? numberValue(obj.windowSeconds);
   const windowMinutes = numberValue(obj.window_minutes) ?? numberValue(obj.windowMinutes);
   const windowSeconds = explicitWindowSeconds ?? (windowMinutes !== undefined ? windowMinutes * 60 : undefined);
+  if (windowSeconds !== undefined && windowSeconds <= 0) return undefined;
 
   const clampedUsed = Math.max(0, Math.min(100, usedPercent));
   return {

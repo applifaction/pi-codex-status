@@ -49,6 +49,28 @@ export function formatDuration(seconds: number | undefined): string {
   return `${minutes || 1}m`;
 }
 
+type LabeledWindow = {
+  label: string;
+  window: LimitWindow;
+};
+
+function labeledWindows(limit: RateLimit | undefined): LabeledWindow[] {
+  if (!limit) return [];
+  const slots: Array<{ fallbackLabel: string; window: LimitWindow | undefined }> = [
+    { fallbackLabel: "5h", window: limit.primary },
+    { fallbackLabel: "7d", window: limit.secondary },
+  ];
+
+  return slots
+    .filter((slot): slot is { fallbackLabel: string; window: LimitWindow } =>
+      !!slot.window && (slot.window.windowSeconds === undefined || slot.window.windowSeconds > 0),
+    )
+    .map(({ fallbackLabel, window }) => ({
+      label: formatDuration(window.windowSeconds) || fallbackLabel,
+      window,
+    }));
+}
+
 export function bar(leftPercent: number | undefined, width = 20): string {
   const left = Math.max(0, Math.min(100, leftPercent ?? 0));
   const filled = Math.max(0, Math.min(width, Math.round((left / 100) * width)));
@@ -77,11 +99,12 @@ function formatCredits(snapshot: CodexUsageSnapshot): string | undefined {
 
 function addLimitLines(lines: string[], limit: RateLimit, now: Date, nested = false): void {
   if (nested) lines.push(`${limit.name} limit:`);
-  const primary = formatWindow(nested ? "  5h limit" : "5h limit", limit.primary, now);
-  const secondary = formatWindow(nested ? "  Weekly limit" : "Weekly limit", limit.secondary, now);
-  if (primary) lines.push(primary);
-  if (secondary) lines.push(secondary);
-  if (!primary && !secondary) lines.push(`${padLabel(nested ? `  ${limit.name}` : limit.name)}no window data`);
+  const windows = labeledWindows(limit);
+  for (const { label, window } of windows) {
+    const line = formatWindow(`${nested ? "  " : ""}${label} limit`, window, now);
+    if (line) lines.push(line);
+  }
+  if (windows.length === 0) lines.push(`${padLabel(nested ? `  ${limit.name}` : limit.name)}no window data`);
 }
 
 function contentLines(snapshot: CodexUsageSnapshot, options: FormatOptions = {}): string[] {
@@ -135,11 +158,18 @@ function resetSeconds(window: LimitWindow | undefined, now: Date): number | unde
 
 export function formatStatusline(snapshot: CodexUsageSnapshot, now = new Date()): string {
   const parts: string[] = [];
-  const primary = snapshot.defaultLimit?.primary;
-  const secondary = snapshot.defaultLimit?.secondary;
-  if (primary) parts.push(`5h:${pct(primary.leftPercent)}`);
-  if (secondary) parts.push(`7d:${pct(secondary.leftPercent)}`);
-  const reset = formatDuration(resetSeconds(secondary ?? primary, now));
+  const windows = labeledWindows(snapshot.defaultLimit);
+  for (const { label, window } of windows) {
+    parts.push(`${label}:${pct(window.leftPercent)}`);
+  }
+
+  const resetWindow = windows.reduce<LimitWindow | undefined>((selected, candidate) => {
+    if (!selected) return candidate.window;
+    return (candidate.window.windowSeconds ?? -1) >= (selected.windowSeconds ?? -1)
+      ? candidate.window
+      : selected;
+  }, undefined);
+  const reset = formatDuration(resetSeconds(resetWindow, now));
   if (reset) parts.push(`↺${reset}`);
   return parts.length > 0 ? parts.join(" ") : "Codex usage unavailable";
 }

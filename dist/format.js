@@ -41,6 +41,20 @@ export function formatDuration(seconds) {
         return `${hours}h${minutes ? `${minutes}m` : ""}`;
     return `${minutes || 1}m`;
 }
+function labeledWindows(limit) {
+    if (!limit)
+        return [];
+    const slots = [
+        { fallbackLabel: "5h", window: limit.primary },
+        { fallbackLabel: "7d", window: limit.secondary },
+    ];
+    return slots
+        .filter((slot) => !!slot.window && (slot.window.windowSeconds === undefined || slot.window.windowSeconds > 0))
+        .map(({ fallbackLabel, window }) => ({
+        label: formatDuration(window.windowSeconds) || fallbackLabel,
+        window,
+    }));
+}
 export function bar(leftPercent, width = 20) {
     const left = Math.max(0, Math.min(100, leftPercent ?? 0));
     const filled = Math.max(0, Math.min(width, Math.round((left / 100) * width)));
@@ -71,13 +85,13 @@ function formatCredits(snapshot) {
 function addLimitLines(lines, limit, now, nested = false) {
     if (nested)
         lines.push(`${limit.name} limit:`);
-    const primary = formatWindow(nested ? "  5h limit" : "5h limit", limit.primary, now);
-    const secondary = formatWindow(nested ? "  Weekly limit" : "Weekly limit", limit.secondary, now);
-    if (primary)
-        lines.push(primary);
-    if (secondary)
-        lines.push(secondary);
-    if (!primary && !secondary)
+    const windows = labeledWindows(limit);
+    for (const { label, window } of windows) {
+        const line = formatWindow(`${nested ? "  " : ""}${label} limit`, window, now);
+        if (line)
+            lines.push(line);
+    }
+    if (windows.length === 0)
         lines.push(`${padLabel(nested ? `  ${limit.name}` : limit.name)}no window data`);
 }
 function contentLines(snapshot, options = {}) {
@@ -132,13 +146,18 @@ function resetSeconds(window, now) {
 }
 export function formatStatusline(snapshot, now = new Date()) {
     const parts = [];
-    const primary = snapshot.defaultLimit?.primary;
-    const secondary = snapshot.defaultLimit?.secondary;
-    if (primary)
-        parts.push(`5h:${pct(primary.leftPercent)}`);
-    if (secondary)
-        parts.push(`7d:${pct(secondary.leftPercent)}`);
-    const reset = formatDuration(resetSeconds(secondary ?? primary, now));
+    const windows = labeledWindows(snapshot.defaultLimit);
+    for (const { label, window } of windows) {
+        parts.push(`${label}:${pct(window.leftPercent)}`);
+    }
+    const resetWindow = windows.reduce((selected, candidate) => {
+        if (!selected)
+            return candidate.window;
+        return (candidate.window.windowSeconds ?? -1) >= (selected.windowSeconds ?? -1)
+            ? candidate.window
+            : selected;
+    }, undefined);
+    const reset = formatDuration(resetSeconds(resetWindow, now));
     if (reset)
         parts.push(`↺${reset}`);
     return parts.length > 0 ? parts.join(" ") : "Codex usage unavailable";

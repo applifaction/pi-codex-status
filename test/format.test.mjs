@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bar, formatReset, formatStatusline } from "../dist/format.js";
+import { bar, formatReset, formatStatus, formatStatusline } from "../dist/format.js";
 import { parseCodexRateLimitHeaders } from "../dist/rate-limits.js";
+import { normalizeWindow } from "../dist/usage.js";
 
 test("bar renders left percentage", () => {
   assert.equal(bar(95, 20), "[███████████████████░]");
@@ -54,4 +55,48 @@ test("parses x-codex rate-limit headers", () => {
   assert.equal(snapshot.additionalLimits[0].name, "GPT-5.3-Codex-Spark");
   assert.equal(snapshot.additionalLimits[0].primary.leftPercent, 88);
   assert.equal(snapshot.credits.balance, "553.45");
+});
+
+test("does not synthesize 100% left when a used-percent header is missing", () => {
+  const snapshot = parseCodexRateLimitHeaders({
+    "x-codex-primary-used-percent": "15",
+    "x-codex-primary-window-minutes": "10080",
+    "x-codex-secondary-window-minutes": "300",
+    "x-codex-secondary-reset-at": "1785903166",
+  });
+
+  assert.equal(snapshot.defaultLimit.primary.leftPercent, 85);
+  assert.equal(snapshot.defaultLimit.secondary, undefined);
+});
+
+test("drops inactive zero-duration windows", () => {
+  const snapshot = parseCodexRateLimitHeaders({
+    "x-codex-primary-used-percent": "15",
+    "x-codex-primary-window-minutes": "10080",
+    "x-codex-secondary-used-percent": "0",
+    "x-codex-secondary-window-minutes": "0",
+  });
+
+  assert.equal(snapshot.defaultLimit.secondary, undefined);
+  assert.equal(normalizeWindow({ used_percent: 0, limit_window_seconds: 0 }), undefined);
+});
+
+test("labels a primary seven-day window by duration", () => {
+  const snapshot = {
+    schemaVersion: 1,
+    source: "api",
+    fetchedAt: "2026-07-29T12:00:00.000Z",
+    account: { plan: "pro" },
+    defaultLimit: {
+      id: "codex",
+      name: "Codex",
+      primary: { usedPercent: 15, leftPercent: 85, windowSeconds: 604800 },
+    },
+    additionalLimits: [],
+  };
+
+  assert.equal(formatStatusline(snapshot), "7d:85%");
+  const status = formatStatus(snapshot, { box: false });
+  assert.match(status, /7d limit:\s+.*85% left/);
+  assert.doesNotMatch(status, /5h limit:/);
 });
